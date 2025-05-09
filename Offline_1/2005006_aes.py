@@ -81,19 +81,19 @@ def generate_random_iv():
 
 def g(bv, round_num):
     bv = bv << 8
-    for i in range(4):
-        row = bv[i*8 : i*8+4].intValue()
-        col = bv[i*8+4 : i*8+8].intValue()
+    for i in range(0,32,8):
+        row = bv[i : i+4].intValue()
+        col = bv[i+4 : i+8].intValue()
         value = Sbox[row * 16 + col]
-        bv[i*8 : i*8+8] = BitVector(intVal=value, size=8)
+        bv[i : i+8] = BitVector(intVal=value, size=8)
     bv = bv ^ Rcon[round_num - 1]
     return bv
 
 def key_expansion(key_hex, round_num, w=None):
     if w is None:
         w = []
-        for i in range(4):
-            w.append(BitVector(hexstring=key_hex[i*8 : i*8+8]))
+        for i in range(0,32,8):
+            w.append(BitVector(hexstring=key_hex[i : i+8]))
 
     if round_num == 11:
         return
@@ -115,34 +115,34 @@ def key_expansion(key_hex, round_num, w=None):
 
 
 def get_ciphertext(plaintext_bv):
-    plaintext_bv  = plaintext_bv ^ round_keys[0]
+    ciphertext_bv  = plaintext_bv ^ round_keys[0]
 
     for i in range(1, 11):
         # SubBytes
-        for j in range(16):
-            row = plaintext_bv[j*8 : j*8+4].intValue()
-            col = plaintext_bv[j*8+4 : j*8+8].intValue()
+        for j in range(0,128,8):
+            row = ciphertext_bv[j : j+4].intValue()
+            col = ciphertext_bv[j+4 : j+8].intValue()
             value = Sbox[row * 16 + col]
-            plaintext_bv[j*8 : j*8+8] = BitVector(intVal=value, size=8)
+            ciphertext_bv[j : j+8] = BitVector(intVal=value, size=8)
 
         # ShiftRows
         rows = []
         for j in range(4):
             row = BitVector(size=0)
             for k in range(4):
-                index = j*8 + k * 32
-                row += plaintext_bv[index : index+8]
+                index = j*8 + k*32
+                row += ciphertext_bv[index : index+8]
             rows.append(row)
 
         rows[1] = rows[1] << 8
         rows[2] = rows[2] << 16
         rows[3] = rows[3] << 24
 
-        plaintext_bv = BitVector(size=0)
+        ciphertext_bv = BitVector(size=0)
 
-        for j in range(4):
+        for j in range(0,32,8):
             for k in range(4):
-                plaintext_bv += rows[k][j*8 : j*8+8]
+                ciphertext_bv += rows[k][j : j+8]
 
         if i != 10:
             # MixColumns
@@ -153,51 +153,52 @@ def get_ciphertext(plaintext_bv):
                 for k in range(4):
                     temp = BitVector(size=8)
                     for l in range(4):
-                        temp = temp ^ Mixer[j][l].gf_multiply_modular(plaintext_bv[k*32 + l*8 : k*32 + l*8 + 8], AES_modulus, 8)
+                        index = k*32 + l*8
+                        temp = temp ^ Mixer[j][l].gf_multiply_modular(ciphertext_bv[index : index + 8], AES_modulus, 8)
                     row += temp
                 rows.append(row)
 
-            plaintext_bv = BitVector(size=0)
-            for j in range(4):
+            ciphertext_bv = BitVector(size=0)
+            for j in range(0,32,8):
                 for k in range(4):
-                    plaintext_bv += rows[k][j*8 : j*8+8]
+                    ciphertext_bv += rows[k][j : j+8]
 
         # AddRoundKey
-        plaintext_bv = plaintext_bv ^ round_keys[i]
+        ciphertext_bv = ciphertext_bv ^ round_keys[i]
 
-    return plaintext_bv
+    return ciphertext_bv
 
 def get_plaintext(ciphertext_bv):
-    ciphertext_bv = ciphertext_bv ^ round_keys[10]
+    plaintext_bv = ciphertext_bv ^ round_keys[10]
     for i in range(9, -1, -1):
         # InvShiftRows
         rows = []
         for j in range(4):
             row = BitVector(size=0)
             for k in range(4):
-                index = j*8 + k * 32
-                row += ciphertext_bv[index : index+8]
+                index = j*8 + k*32
+                row += plaintext_bv[index : index+8]
             rows.append(row)
 
         rows[1] = rows[1] >> 8
         rows[2] = rows[2] >> 16
         rows[3] = rows[3] >> 24
 
-        ciphertext_bv = BitVector(size=0)
+        plaintext_bv = BitVector(size=0)
 
-        for j in range(4):
+        for j in range(0,32,8):
             for k in range(4):
-                ciphertext_bv += rows[k][j*8 : j*8+8]
+                plaintext_bv += rows[k][j : j+8]
 
         # InvSubBytes
-        for j in range(16):
-            row = ciphertext_bv[j*8 : j*8+4].intValue()
-            col = ciphertext_bv[j*8+4 : j*8+8].intValue()
+        for j in range(0,128,8):
+            row = plaintext_bv[j : j+4].intValue()
+            col = plaintext_bv[j+4 : j+8].intValue()
             value = InvSbox[row * 16 + col]
-            ciphertext_bv[j*8 : j*8+8] = BitVector(intVal=value, size=8)
+            plaintext_bv[j : j+8] = BitVector(intVal=value, size=8)
 
         # InvAddRoundKey
-        ciphertext_bv = ciphertext_bv ^ round_keys[i]
+        plaintext_bv = plaintext_bv ^ round_keys[i]
 
         if i != 0:
             # InvMixColumns
@@ -207,16 +208,17 @@ def get_plaintext(ciphertext_bv):
                 for k in range(4):
                     temp = BitVector(size=8)
                     for l in range(4):
-                        temp = temp ^ InvMixer[j][l].gf_multiply_modular(ciphertext_bv[k*32 + l*8 : k*32 + l*8 + 8], AES_modulus, 8)
+                        index = k*32 + l*8
+                        temp = temp ^ InvMixer[j][l].gf_multiply_modular(plaintext_bv[index : index + 8], AES_modulus, 8)
                     row += temp
                 rows.append(row)
 
-            ciphertext_bv = BitVector(size=0)
-            for j in range(4):
+            plaintext_bv = BitVector(size=0)
+            for j in range(0,32,8):
                 for k in range(4):
-                    ciphertext_bv += rows[k][j*8 : j*8+8]
+                    plaintext_bv += rows[k][j : j+8]
 
-    return ciphertext_bv
+    return plaintext_bv
         
 def print_string(string, type, padded):
     if(type == "hex"):
@@ -253,9 +255,7 @@ def main():
     round_keys.append(BitVector(hexstring=key_hex))
     key_expansion(key_hex, 1)
     
-    after_key_expansion_time = time.perf_counter()
-
-    time_taken_key_expansion = (after_key_expansion_time - before_key_expansion_time) * 1000
+    time_taken_key_expansion = (time.perf_counter() - before_key_expansion_time) * 1000
 
     plaintext = input("Plaintext:\nIn ASCII: ")
     plaintext_hex = plaintext.encode('utf-8').hex()
@@ -277,72 +277,58 @@ def main():
 
     # Encryption
 
-    plaintext_bv_chunks = []
-    for i in range(0, len(plaintext_hex), 32):
-        plaintext_bv_chunks.append(BitVector(hexstring=plaintext_hex[i:i+32]))
-
     iv = generate_random_iv()
     original_iv = iv.deep_copy()
-    ciphertext_bv_chunks = []
-
+    ciphertext_hex = original_iv.get_bitvector_in_hex()
     before_encryption_time = time.perf_counter()
 
-    for i in range(len(plaintext_bv_chunks)):
-        plaintext_bv = plaintext_bv_chunks[i] ^ iv
-        ciphertext_bv = get_ciphertext(plaintext_bv)
-        ciphertext_bv_chunks.append(ciphertext_bv)
-        iv = ciphertext_bv.deep_copy()
+    for i in range(0, len(plaintext_hex), 32):
+        plaintext_chunk = BitVector(hexstring=plaintext_hex[i:i+32])
+        plaintext_chunk = plaintext_chunk ^ iv
+        ciphertext_chunk = get_ciphertext(plaintext_chunk)
+        ciphertext_hex += ciphertext_chunk.get_bitvector_in_hex()
+        iv = ciphertext_chunk.deep_copy()
     
-    after_encryption_time = time.perf_counter()
-    time_taken_encryption = (after_encryption_time - before_encryption_time) * 1000
+    time_taken_encryption = (time.perf_counter() - before_encryption_time) * 1000
 
-    iv = original_iv.deep_copy()
-
-    concatenated_ciphertext_hex = original_iv.get_bitvector_in_hex() 
-    for i in range(len(ciphertext_bv_chunks)):
-        concatenated_ciphertext_hex += ciphertext_bv_chunks[i].get_bitvector_in_hex()
-
-    concatenated_cipher_text = bytes.fromhex(concatenated_ciphertext_hex).decode('utf-8', errors='ignore')
-    print("Cipheredtext:")
-    print_string(concatenated_ciphertext_hex, "hex", False)
-    print_string(concatenated_cipher_text, "ascii", False)
+    ciphertext = bytes.fromhex(ciphertext_hex).decode('utf-8', errors='ignore')
+    print("Ciphered Text:")
+    print_string(ciphertext_hex, "hex", False)
+    print_string(ciphertext, "ascii", False)
     print()
 
     
     # Decryption
 
-    decrypted_plaintext_bv_chunks = []
-
+    deciphertext_hex = ""
     before_decryption_time = time.perf_counter()
+    iv = BitVector(hexstring=ciphertext_hex[:32])
+    ciphertext_hex = ciphertext_hex[32:]
     
-    for i in range(len(ciphertext_bv_chunks)):
-        decrypted_plaintext_bv = get_plaintext(ciphertext_bv_chunks[i])
-        decrypted_plaintext_bv = decrypted_plaintext_bv ^ iv
-        decrypted_plaintext_bv_chunks.append(decrypted_plaintext_bv)
-        iv = ciphertext_bv_chunks[i].deep_copy()
+    for i in range(0,len(ciphertext_hex),32):
+        ciphertext_chunk = BitVector(hexstring=ciphertext_hex[i:i+32])
+        deciphertext_chunk = get_plaintext(ciphertext_chunk)
+        deciphertext_chunk = deciphertext_chunk ^ iv
+        deciphertext_hex += deciphertext_chunk.get_bitvector_in_hex()
+        iv = ciphertext_chunk.deep_copy()
     
-    after_decryption_time = time.perf_counter()
-    time_taken_decryption = (after_decryption_time - before_decryption_time) * 1000
-
-    concatenated_decrypted_plaintext_hex = ""
-    for i in range(len(decrypted_plaintext_bv_chunks)):
-        concatenated_decrypted_plaintext_hex += decrypted_plaintext_bv_chunks[i].get_bitvector_in_hex()
+    time_taken_decryption = (time.perf_counter() - before_decryption_time) * 1000
     
-    concatenated_decrypted_plaintext = bytes.fromhex(concatenated_decrypted_plaintext_hex).decode('utf-8', errors='ignore')
+    deciphertext = bytes.fromhex(deciphertext_hex).decode('utf-8', errors='ignore')
+    print("Deciphered Text:")
+    print("Before Unpadding:")
+    print_string(deciphertext_hex, "hex", False)
+    print_string(deciphertext, "ascii", False)
     
     # Remove padding
-    padding = int(concatenated_decrypted_plaintext_hex[-2:], 16)
+    padding = int(deciphertext_hex[-2:], 16)
     # We need to remove padding number of bytes from the end
-    concatenated_decrypted_plaintext_hex_unpadded = concatenated_decrypted_plaintext_hex[:-2*padding]
-    concatenated_decrypted_plaintext_unpadded = bytes.fromhex(concatenated_decrypted_plaintext_hex_unpadded).decode('utf-8', errors='ignore') 
+    deciphertext_hex = deciphertext_hex[:-2*padding]
+    deciphertext = bytes.fromhex(deciphertext_hex).decode('utf-8', errors='ignore') 
 
-    print("Decipheredtext:")
-    print("Before Unpadding:")
-    print_string(concatenated_decrypted_plaintext_hex, "hex", False)
-    print_string(concatenated_decrypted_plaintext, "ascii", False)
     print("After Unpadding:")
-    print_string(concatenated_decrypted_plaintext_hex_unpadded, "hex", False)
-    print_string(concatenated_decrypted_plaintext_unpadded, "ascii", False)
+    print_string(deciphertext_hex, "hex", False)
+    print_string(deciphertext, "ascii", False)
     print()
 
     # Print time taken
