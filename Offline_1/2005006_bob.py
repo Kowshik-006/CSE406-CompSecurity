@@ -1,9 +1,34 @@
 import socket
 import random
 import importlib
+import os
+import struct
 
 ecdh = importlib.import_module("2005006_ecdh")
 aes = importlib.import_module("2005006_aes")
+
+def receive_file(sock, file_path):
+    try:
+        # Receive file size first
+        file_size_data = sock.recv(8)
+        file_size = struct.unpack('!Q', file_size_data)[0]
+        
+        print(f"File size: {file_size}")
+        # Receive file in chunks
+        received_size = 0
+        with open(file_path, 'wb') as file:
+            while received_size < file_size:
+                data = sock.recv(min(8192, file_size - received_size))
+                if not data:
+                    break
+                file.write(data)
+                received_size += len(data)
+        
+        print("\nFile received successfully!")
+        return True
+    except Exception as e:
+        print(f"\nError receiving file: {e}")
+        return False
 
 def main():
     # Create socket
@@ -46,50 +71,57 @@ def main():
     ready_signal = conn.recv(1024).decode()
     if ready_signal == "READY":
         conn.send("READY".encode())
+        # Initialize AES with shared key
+        aes.round_keys.clear()
+        aes.round_keys.append(aes.BitVector(hexstring=shared_key_hex))
+        aes.key_expansion(shared_key_hex, 1)
         
         while True:
             try:
-                # Receive encrypted message
-                ciphertext_hex = conn.recv(1024).decode()
-                print("\nReceived Ciphered Text from Alice")
-                ciphertext = bytes.fromhex(ciphertext_hex).decode('utf-8', errors='ignore')
-                aes.print_string(ciphertext_hex, "hex", False)
-                aes.print_string(ciphertext, "ascii", False)
-                
-                # Initialize AES with shared key
-                aes.round_keys.clear()
-                aes.round_keys.append(aes.BitVector(hexstring=shared_key_hex))
-                aes.key_expansion(shared_key_hex, 1)
-                
-                # Decrypt message
-                iv = aes.BitVector(hexstring=ciphertext_hex[:32])
-                ciphertext_hex = ciphertext_hex[32:]
-                deciphertext_hex = ""
-                
-                for i in range(0, len(ciphertext_hex), 32):
-                    ciphertext_chunk = aes.BitVector(hexstring=ciphertext_hex[i:i+32])
-                    deciphertext_chunk = aes.get_plaintext(ciphertext_chunk)
-                    deciphertext_chunk = deciphertext_chunk ^ iv
-                    deciphertext_hex += deciphertext_chunk.get_bitvector_in_hex()
-                    iv = ciphertext_chunk.deep_copy()
+                choice = conn.recv(1).decode()
+                if choice == "1":
+                    print("\nReceiving encrypted message from Alice...")
+                    # Receive encrypted message
+                    ciphertext_hex = conn.recv(1024).decode()
+                    print("Received Ciphered Text from Alice\n")
+                    
+                    # Decryption
+                    deciphertext_hex = aes.decrypt_data(ciphertext_hex, False)
+                    
+                    print("After Unpadding:")
+                    aes.print_string(bytes.fromhex(deciphertext_hex).decode('utf-8', errors='ignore'), "ascii", False)
+                    aes.print_string(deciphertext_hex, "hex", False)
+                    print()
 
-                deciphertext = bytes.fromhex(deciphertext_hex).decode('utf-8', errors='ignore')
-                print("\nDeciphered Text:")
-                print("Before Unpadding:")
-                aes.print_string(deciphertext_hex, "hex", False)
-                aes.print_string(deciphertext, "ascii", False)
-                
-                # Remove padding
-                padding = int(deciphertext_hex[-2:], 16)
-                deciphertext_hex = deciphertext_hex[:-2*padding]
-                deciphertext = bytes.fromhex(deciphertext_hex).decode('utf-8', errors='ignore')
-                print("\nAfter Unpadding:")
-                aes.print_string(deciphertext_hex, "hex", False)
-                aes.print_string(deciphertext, "ascii", False)
-                print()
+                elif choice == "2":
+                    # Receive encrypted file
+                    print("\nReceiving encrypted file from Alice...")
 
-                continue_communication = conn.recv(1024).decode()
-                if continue_communication == 'n' or continue_communication == 'N':
+                    name_length = struct.unpack('!I', conn.recv(4))[0]
+                    file_name = conn.recv(name_length).decode()
+
+                    encrypted_file_path = "received_encrypted_" + file_name
+                    if receive_file(conn, encrypted_file_path):
+                        print(f"File received and saved as: {encrypted_file_path}")
+                        print("Decrypting file...")
+                        # Read the encrypted file
+                        with open(encrypted_file_path, 'rb') as file:
+                            encrypted_content = file.read()
+                        
+                        # Decrypt the file
+                        decrypted_content = aes.decrypt_data(encrypted_content.hex(), True)
+                        
+                        # Save the decrypted file
+                        decrypted_file_path = "decrypted_" + file_name
+                        with open(decrypted_file_path, 'wb') as file:
+                            file.write(bytes.fromhex(decrypted_content))
+                        
+                        print(f"File decrypted and saved as: {decrypted_file_path}")
+                    else:
+                        print("Failed to receive file!")
+
+                continue_communication = conn.recv(1).decode()
+                if continue_communication.lower() == 'n':
                     break
                     
             except ConnectionAbortedError:

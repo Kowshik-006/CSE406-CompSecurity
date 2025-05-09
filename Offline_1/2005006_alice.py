@@ -1,9 +1,40 @@
 import socket
 import random
 import importlib
+import os
+import struct
 
 ecdh = importlib.import_module("2005006_ecdh")
 aes = importlib.import_module("2005006_aes")
+
+def send_file(sock, file_path, file_name):
+    try:
+        sock.send(struct.pack('!I', len(file_name)))
+        sock.send(file_name.encode())
+        
+        # Get file size
+        file_size = os.path.getsize(file_path)
+        print(f"File size: {file_size}")
+        
+        # Send file size first (8 bytes)
+        sock.send(struct.pack('!Q', file_size))
+        
+        # Send file in chunks
+        with open(file_path, 'rb') as file:
+            bytes_sent = 0
+            while True:
+                data = file.read(8192)  # Read in 8KB chunks
+                if not data:
+                    break
+                sock.send(data)
+                bytes_sent += len(data)
+        
+        print("\nFile sent successfully!")
+        return True
+    except Exception as e:
+        print(f"\nError sending file: {e}")
+        return False
+
 
 def main():
     # Create socket
@@ -43,46 +74,60 @@ def main():
     
     if ready_response == "READY":
         continue_communication = 'y'
-        while continue_communication == 'y' or continue_communication == 'Y':
+        
+        # Initialize AES with shared key
+        aes.round_keys.clear()
+        aes.round_keys.append(aes.BitVector(hexstring=shared_key_hex))
+        aes.key_expansion(shared_key_hex, 1)
+
+        while continue_communication.lower() == 'y':
             try:
-                plaintext = input("\nPlaintext:\nIn ASCII: ")
-                plaintext_hex = plaintext.encode('utf-8').hex()
-                aes.print_string(plaintext_hex, "hex", False)
-                
-                # Initialize AES with shared key
-                aes.round_keys.clear()
-                aes.round_keys.append(aes.BitVector(hexstring=shared_key_hex))
-                aes.key_expansion(shared_key_hex, 1)
-                
-                # Encryption
-                padding = 16 - (len(plaintext) % 16)
-                
-                for i in range(padding):
-                    plaintext += chr(padding)
-                plaintext_hex = plaintext.encode('utf-8').hex()
-                
-                aes.print_string(plaintext, "ascii", True)
-                aes.print_string(plaintext_hex, "hex", True)
-                print()
-                
-                iv = aes.generate_random_iv()
-                original_iv = iv.deep_copy()
-                ciphertext_hex = original_iv.get_bitvector_in_hex()
-                
-                for i in range(0, len(plaintext_hex), 32):
-                    plaintext_chunk = aes.BitVector(hexstring=plaintext_hex[i:i+32])
-                    plaintext_chunk = plaintext_chunk ^ iv
-                    ciphertext_chunk = aes.get_ciphertext(plaintext_chunk)
-                    ciphertext_hex += ciphertext_chunk.get_bitvector_in_hex()
-                    iv = ciphertext_chunk.deep_copy()
+                print("\nChoose operation:")
+                print("1. Encrypt/Decrypt plaintext")
+                print("2. Encrypt/Decrypt file")
+                choice = input("Enter your choice (1 or 2): ")
+                s.send(choice.encode())
+                if choice == "1":
+                    plaintext = input("\nPlaintext:\nIn ASCII: ")
+                    plaintext_hex = plaintext.encode('utf-8').hex()
+                    aes.print_string(plaintext_hex, "hex", False)
+                    
+                    # Encryption
+                    ciphertext_hex = aes.encrypt_data(plaintext, False)
 
-                ciphertext = bytes.fromhex(ciphertext_hex).decode('utf-8', errors='ignore')
+                    ciphertext = bytes.fromhex(ciphertext_hex).decode('utf-8', errors='ignore')
+                    
+                    print("\nSending Ciphered Text to Bob:")
+                    aes.print_string(ciphertext_hex, "hex", False)
+                    aes.print_string(ciphertext, "ascii", False)
+                    print()
+                    s.send(ciphertext_hex.encode())
 
-                print("Sending Ciphered Text to Bob:")
-                aes.print_string(ciphertext_hex, "hex", False)
-                aes.print_string(ciphertext, "ascii", False)
-                print()
-                s.send(ciphertext_hex.encode())
+                elif choice == "2":
+                    file_path = input("Enter file path to encrypt: ")
+                    if not os.path.exists(file_path):
+                        print("File does not exist!")
+                        continue
+
+                    with open(file_path, 'rb') as file:
+                        file_content = file.read()
+                    
+                    print("Encrypting file...")
+                    # Encryption
+                    ciphertext_hex = aes.encrypt_data(file_content, True)
+                    file_name = os.path.basename(file_path)
+                    encrypted_file_path = "encrypted_" + file_name
+                    with open(encrypted_file_path, 'wb') as file:
+                        file.write(bytes.fromhex(ciphertext_hex))
+
+                    print(f"Encrypted file saved as: {encrypted_file_path}")
+                    
+                    # Send the encrypted file
+                    print("\nSending encrypted file to Bob...")
+                    if send_file(s, encrypted_file_path, file_name):
+                        print("File transfer completed!")
+                    else:
+                        print("File transfer failed!")
 
                 continue_communication = input("Continue communication? (y/n): ")
                 s.send(continue_communication.encode())
