@@ -238,6 +238,60 @@ def print_string(string, type, padded):
 
     print()
 
+def encrypt_data(data, is_file=False):    
+    # Calculate padding
+    padding = 16 - (len(data) % 16)
+    if is_file:
+        for _ in range(padding):
+            data += bytes([padding])
+        # For file, data is already in bytes
+        data_hex = data.hex()
+    else:
+        for _ in range(padding):
+            data += chr(padding)
+        data_hex = data.encode('utf-8').hex()
+        print_string(data, "ascii", True)
+        print_string(data_hex, "hex", True)
+    
+
+    # Encryption
+    iv = generate_random_iv()
+    original_iv = iv.deep_copy()
+    ciphertext_hex = original_iv.get_bitvector_in_hex()
+    for i in range(0, len(data_hex), 32):
+        data_chunk = BitVector(hexstring=data_hex[i:i+32])
+        data_chunk = data_chunk ^ iv
+        ciphertext_chunk = get_ciphertext(data_chunk)
+        ciphertext_hex += ciphertext_chunk.get_bitvector_in_hex()
+        iv = ciphertext_chunk.deep_copy()
+    
+    return ciphertext_hex
+
+def decrypt_data(ciphertext_hex, is_file=False):
+    # Decrypt message
+    iv = BitVector(hexstring=ciphertext_hex[:32])
+    ciphertext_hex = ciphertext_hex[32:]
+    deciphertext_hex = ""
+    
+    for i in range(0, len(ciphertext_hex), 32):
+        ciphertext_chunk = BitVector(hexstring=ciphertext_hex[i:i+32])
+        deciphertext_chunk = get_plaintext(ciphertext_chunk)
+        deciphertext_chunk = deciphertext_chunk ^ iv
+        deciphertext_hex += deciphertext_chunk.get_bitvector_in_hex()
+        iv = ciphertext_chunk.deep_copy()
+    
+    if not is_file:
+        print("Deciphered Text:")
+        print("Before Unpadding:")
+        print_string(deciphertext_hex, "hex", False)
+        print_string(bytes.fromhex(deciphertext_hex).decode('utf-8', errors='ignore'), "ascii", False)
+    
+    # Remove padding
+    padding = int(deciphertext_hex[-2:], 16)
+    deciphertext_hex = deciphertext_hex[:-2*padding]
+    
+    return deciphertext_hex
+
 def main():
     key = input("Key:\nIn ASCII: ")
     
@@ -246,97 +300,86 @@ def main():
         exit(1)
 
     key_hex = key.encode('utf-8').hex()
-
     print_string(key_hex, "hex", False)
-    print(end="\n")
+    print()
 
     before_key_expansion_time = time.perf_counter()
-
     round_keys.append(BitVector(hexstring=key_hex))
     key_expansion(key_hex, 1)
-    
     time_taken_key_expansion = (time.perf_counter() - before_key_expansion_time) * 1000
 
-    plaintext = input("Plaintext:\nIn ASCII: ")
-    plaintext_hex = plaintext.encode('utf-8').hex()
-    print_string(plaintext_hex, "hex", False)
+    print("\nChoose operation:")
+    print("1. Encrypt/Decrypt plaintext")
+    print("2. Encrypt/Decrypt file")
+    choice = input("Enter your choice (1 or 2): ")
     
-    # Padding - PKCS#7
-    # If the length is a multiple of 16, add 16 bytes of padding, each byte being 16
-    # If the length is not a multiple of 16, add the number of bytes needed to make it a multiple of 16, each byte being the number of bytes added  
-    padding = 16 - (len(plaintext) % 16)
-    for i in range(padding):
-        plaintext += chr(padding)
+    if choice == "1":
+        plaintext = input("\nPlaintext:\nIn ASCII: ")
+        plaintext_hex = plaintext.encode('utf-8').hex()
+        print_string(plaintext_hex, "hex", False)
+        
+        # Encryption
+        before_encryption_time = time.perf_counter()
+        ciphertext_hex = encrypt_data(plaintext, False)
+        time_taken_encryption = (time.perf_counter() - before_encryption_time) * 1000
 
-    print_string(plaintext, "ascii", True)
+        ciphertext = bytes.fromhex(ciphertext_hex).decode('utf-8', errors='ignore')
+        print("\nCiphered Text:")
+        print_string(ciphertext_hex, "hex", False)
+        print_string(ciphertext, "ascii", False)
+        
+        # Decryption
+        before_decryption_time = time.perf_counter()
+        deciphertext_hex = decrypt_data(ciphertext_hex, False)
+        time_taken_decryption = (time.perf_counter() - before_decryption_time) * 1000
+        
+        print("After Unpadding:")
+        print_string(bytes.fromhex(deciphertext_hex).decode('utf-8', errors='ignore'), "ascii", False)
+        print_string(deciphertext_hex, "hex", False)
+        print()
+
+    elif choice == "2":
     
-    plaintext_hex = plaintext.encode('utf-8').hex()
-    print_string(plaintext_hex, "hex", True)
-    print()
+        file_path = input("Enter file path to encrypt: ")
+        if not os.path.exists(file_path):
+            print("File does not exist!")
+            exit(1)
 
+        with open(file_path, 'rb') as file:
+            file_content = file.read()
+        
+        # Encryption
+        before_encryption_time = time.perf_counter()
+        ciphertext_hex = encrypt_data(file_content, True)
+        time_taken_encryption = (time.perf_counter() - before_encryption_time) * 1000
 
-    # Encryption
+        encrypted_file_path = "encrypted_" + file_path
+        with open(encrypted_file_path, 'wb') as file:
+            file.write(bytes.fromhex(ciphertext_hex))
 
-    iv = generate_random_iv()
-    original_iv = iv.deep_copy()
-    ciphertext_hex = original_iv.get_bitvector_in_hex()
-    before_encryption_time = time.perf_counter()
+        print(f"Encrypted file saved as: {encrypted_file_path}")
+        
+        # Decryption
+        before_decryption_time = time.perf_counter()
+        deciphertext_hex = decrypt_data(ciphertext_hex, True)
+        time_taken_decryption = (time.perf_counter() - before_decryption_time) * 1000
+        
+        # Save decrypted file
+        decrypted_file_path = "decrypted_" + file_path
 
-    for i in range(0, len(plaintext_hex), 32):
-        plaintext_chunk = BitVector(hexstring=plaintext_hex[i:i+32])
-        plaintext_chunk = plaintext_chunk ^ iv
-        ciphertext_chunk = get_ciphertext(plaintext_chunk)
-        ciphertext_hex += ciphertext_chunk.get_bitvector_in_hex()
-        iv = ciphertext_chunk.deep_copy()
-    
-    time_taken_encryption = (time.perf_counter() - before_encryption_time) * 1000
+        with open(decrypted_file_path, 'wb') as file:
+            file.write(bytes.fromhex(deciphertext_hex))
+        print(f"Decrypted file saved as: {decrypted_file_path}")
 
-    ciphertext = bytes.fromhex(ciphertext_hex).decode('utf-8', errors='ignore')
-    print("Ciphered Text:")
-    print_string(ciphertext_hex, "hex", False)
-    print_string(ciphertext, "ascii", False)
-    print()
-
-    
-    # Decryption
-
-    deciphertext_hex = ""
-    before_decryption_time = time.perf_counter()
-    iv = BitVector(hexstring=ciphertext_hex[:32])
-    ciphertext_hex = ciphertext_hex[32:]
-    
-    for i in range(0,len(ciphertext_hex),32):
-        ciphertext_chunk = BitVector(hexstring=ciphertext_hex[i:i+32])
-        deciphertext_chunk = get_plaintext(ciphertext_chunk)
-        deciphertext_chunk = deciphertext_chunk ^ iv
-        deciphertext_hex += deciphertext_chunk.get_bitvector_in_hex()
-        iv = ciphertext_chunk.deep_copy()
-    
-    time_taken_decryption = (time.perf_counter() - before_decryption_time) * 1000
-    
-    deciphertext = bytes.fromhex(deciphertext_hex).decode('utf-8', errors='ignore')
-    print("Deciphered Text:")
-    print("Before Unpadding:")
-    print_string(deciphertext_hex, "hex", False)
-    print_string(deciphertext, "ascii", False)
-    
-    # Remove padding
-    padding = int(deciphertext_hex[-2:], 16)
-    # We need to remove padding number of bytes from the end
-    deciphertext_hex = deciphertext_hex[:-2*padding]
-    deciphertext = bytes.fromhex(deciphertext_hex).decode('utf-8', errors='ignore') 
-
-    print("After Unpadding:")
-    print_string(deciphertext_hex, "hex", False)
-    print_string(deciphertext, "ascii", False)
-    print()
+    else:
+        print("Invalid choice!")
+        exit(1)
 
     # Print time taken
-    print("Execution Time Details:")
+    print("\nExecution Time Details:")
     print("Key Schedule Time: ", time_taken_key_expansion, "ms")
     print("Encryption Time: ", time_taken_encryption, "ms") 
     print("Decryption Time: ", time_taken_decryption, "ms")
-
 
 if __name__ == "__main__":
     main()
