@@ -22,10 +22,7 @@ function readNlines(n) {
     const startTime = performance.now();
     
     for (let i = 0; i < n * LINESIZE; i += LINESIZE) {
-      // Reading each byte in the cache line
-      for (let j = 0; j < LINESIZE; j++) {
-        const value = view[i + j];
-      }
+      const value = view[i]; // Accessing the first byte of the cache line to ensure it's read
     }
     
     const endTime = performance.now();
