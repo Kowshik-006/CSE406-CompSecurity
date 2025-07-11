@@ -205,68 +205,80 @@ The primary objectives of this DNS cache poisoning attack are:
 
 \subsection{Attack Timing Diagram}
 
+% Legend positioned above and to the left
+\begin{minipage}[t]{0.3\textwidth}
+\textbf{Legend:}\\
+\textbf{1.} Client Query\\
+\textbf{2.} Query to NS\\
+\textbf{3a-c.} Spoofed Responses\\
+\textbf{4.} Legitimate Response\\
+\textbf{5.} Poisoned Response\\
+\textbf{6.} HTTP Request\\
+\textbf{7.} Phishing Page
+\end{minipage}
+
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[
-    scale=0.9,
+    scale=1.0,
     every node/.style={font=\small}
 ]
 
-% Timeline
-\draw[->] (0,0) -- (16,0) node[right] {Time};
-\node[below] at (0,0) {0ms};
-\node[below] at (2,0) {50ms};
-\node[below] at (4,0) {100ms};
-\node[below] at (6,0) {150ms};
-\node[below] at (8,0) {200ms};
-\node[below] at (10,0) {250ms};
-\node[below] at (12,0) {300ms};
-\node[below] at (14,0) {350ms};
+% Timeline at bottom
+\draw[->] (0,1.5) -- (16,1.5) node[right] {Time};
+\node[below] at (0,1.5) {0ms};
+\node[below] at (2,1.5) {50ms};
+\node[below] at (4,1.5) {100ms};
+\node[below] at (6,1.5) {150ms};
+\node[below] at (8,1.5) {200ms};
+\node[below] at (10,1.5) {250ms};
+\node[below] at (12,1.5) {300ms};
+\node[below] at (14,1.5) {350ms};
 
-% Actor lines and labels
+% Actor lines and labels with better spacing
+\draw[thick] (0,7) -- (14,7);
 \draw[thick] (0,6) -- (14,6);
 \draw[thick] (0,5) -- (14,5);
 \draw[thick] (0,4) -- (14,4);
 \draw[thick] (0,3) -- (14,3);
-\draw[thick] (0,2) -- (14,2);
 
-\node[left] at (-0.2,6) {Attacker};
-\node[left] at (-0.2,5) {Client};
-\node[left] at (-0.2,4) {Resolver};
-\node[left] at (-0.2,3) {Nameserver};
-\node[left] at (-0.2,2) {Phishing Site};
+\node[left] at (-0.5,7) {Attacker};
+\node[left] at (-0.5,6) {Client};
+\node[left] at (-0.5,5) {Resolver};
+\node[left] at (-0.5,4) {Nameserver};
+\node[left] at (-0.5,3) {Phishing Site};
 
-% Attack flow with clear labels
-\draw[->,thick] (1,5) -- (1.5,4);
-\node[right] at (1.6,4.5) {1. Query};
+% Attack flow with properly spaced labels
+\draw[->,thick] (1,6) -- (1.5,5);
+\node at (0.5,6.3) {\textbf{1}};
 
-\draw[->,thick] (2,4) -- (2.5,3);
-\node[right] at (2.6,3.5) {2. Query};
+\draw[->,thick] (2,5) -- (2.5,4);
+\node at (1.7,5.3) {\textbf{2}};
 
-% Parallel attack responses
-\draw[->,red,thick] (1.2,6) -- (1.7,4);
-\node[red,right] at (1.8,5) {3a. Spoofed Response 1};
+% Parallel attack responses - staggered timing
+\draw[->,red,thick] (1.5,7) -- (2,5);
+\node[red] at (1.2,7.3) {\textbf{3a}};
 
-\draw[->,red,thick] (1.8,6) -- (2.3,4);
-\node[red,right] at (2.4,5.5) {3b. Spoofed Response 2};
+\draw[->,red,thick] (2.2,7) -- (2.7,5);
+\node[red] at (2,7.3) {\textbf{3b}};
 
-\draw[->,red,thick] (2.4,6) -- (2.9,4);
-\node[red,right] at (3.0,5.2) {3c. Spoofed Response N};
+\draw[->,red,thick] (2.8,7) -- (3.3,5);
+\node[red] at (2.6,7.3) {\textbf{3c}};
 
 % Race condition
-\draw[->,blue,thick] (3,3) -- (3.5,4);
-\node[blue,right] at (3.6,3.5) {4. Legitimate Response};
+\draw[->,blue,thick] (3.5,4) -- (4,5);
+\node[blue] at (3.2,4.3) {\textbf{4}};
 
 % Poisoned response
-\draw[->,thick] (4,4) -- (4.5,5);
-\node[right] at (4.6,4.5) {5. Poisoned Response};
+\draw[->,thick] (4.5,5) -- (5,6);
+\node at (4.2,5.3) {\textbf{5}};
 
 % Phishing
-\draw[->,orange,thick] (5,5) -- (5.5,2);
-\node[orange,right] at (5.6,3.5) {6. HTTP Request};
+\draw[->,orange,thick] (6,6) -- (6.5,3);
+\node[orange] at (5.7,6.3) {\textbf{6}};
 
-\draw[->,orange,thick] (6,2) -- (6.5,5);
-\node[orange,right] at (6.6,3.5) {7. Phishing Page};
+\draw[->,orange,thick] (7,3) -- (7.5,6);
+\node[orange] at (6.7,3.3) {\textbf{7}};
 
 \end{tikzpicture}
 \caption{Attack Timing: DNS Poisoning and Phishing}
