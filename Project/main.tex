@@ -163,29 +163,40 @@ The primary objectives of this DNS cache poisoning attack are:
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[
-    scale=0.8,
+    scale=1.0,
     every node/.style={font=\small}
 ]
 
 % Timeline
-\draw[->] (0,0) -- (12,0);
-\node[below] at (0,0) {0ms};
-\node[below] at (2,0) {100ms};
-\node[below] at (4,0) {200ms};
-\node[below] at (6,0) {300ms};
-\node[below] at (8,0) {400ms};
-\node[below] at (10,0) {500ms};
+\draw[->] (0,1) -- (12,1) node[right] {Time};
+\node[below] at (0,1) {0ms};
+\node[below] at (2,1) {100ms};
+\node[below] at (4,1) {200ms};
+\node[below] at (6,1) {300ms};
+\node[below] at (8,1) {400ms};
+\node[below] at (10,1) {500ms};
 
-% Actors
-\node[left] at (0,4) {Client};
-\node[left] at (0,3) {Resolver};
-\node[left] at (0,2) {Nameserver};
+% Actor lines and labels
+\draw[thick] (0,4) -- (10,4);
+\draw[thick] (0,3) -- (10,3);
+\draw[thick] (0,2) -- (10,2);
 
-% Normal DNS flow
-\draw[->] (0.5,4) -- (1,3) node[midway,above] {Query};
-\draw[->] (1.5,3) -- (2,2) node[midway,above] {Query};
-\draw[->] (2.5,2) -- (3,3) node[midway,above] {Response};
-\draw[->] (3.5,3) -- (4,4) node[midway,above] {Response};
+\node[left] at (-0.2,4) {Client};
+\node[left] at (-0.2,3) {Resolver};
+\node[left] at (-0.2,2) {Nameserver};
+
+% Normal DNS flow with better positioned labels
+\draw[->,thick] (1,4) -- (1.5,3);
+\node[right] at (1.6,3.5) {1. Query};
+
+\draw[->,thick] (2,3) -- (2.5,2);
+\node[right] at (0.4,2.5) {2. Query};
+
+\draw[->,thick] (3,2) -- (3.5,3);
+\node[right] at (3.6,2.5) {3. Response};
+
+\draw[->,thick] (4,3) -- (4.5,4);
+\node[right] at (4.6,3.5) {4. Response};
 
 \end{tikzpicture}
 \caption{Normal DNS Resolution Timing}
@@ -197,12 +208,12 @@ The primary objectives of this DNS cache poisoning attack are:
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[
-    scale=0.8,
+    scale=0.9,
     every node/.style={font=\small}
 ]
 
 % Timeline
-\draw[->] (0,0) -- (16,0);
+\draw[->] (0,0) -- (16,0) node[right] {Time};
 \node[below] at (0,0) {0ms};
 \node[below] at (2,0) {50ms};
 \node[below] at (4,0) {100ms};
@@ -212,31 +223,50 @@ The primary objectives of this DNS cache poisoning attack are:
 \node[below] at (12,0) {300ms};
 \node[below] at (14,0) {350ms};
 
-% Actors
-\node[left] at (0,6) {Attacker};
-\node[left] at (0,5) {Client};
-\node[left] at (0,4) {Resolver};
-\node[left] at (0,3) {Nameserver};
-\node[left] at (0,2) {Phishing Site};
+% Actor lines and labels
+\draw[thick] (0,6) -- (14,6);
+\draw[thick] (0,5) -- (14,5);
+\draw[thick] (0,4) -- (14,4);
+\draw[thick] (0,3) -- (14,3);
+\draw[thick] (0,2) -- (14,2);
 
-% Attack flow
-\draw[->] (0.5,5) -- (1,4) node[midway,above] {Query};
-\draw[->] (1.5,4) -- (2,3) node[midway,above] {Query};
+\node[left] at (-0.2,6) {Attacker};
+\node[left] at (-0.2,5) {Client};
+\node[left] at (-0.2,4) {Resolver};
+\node[left] at (-0.2,3) {Nameserver};
+\node[left] at (-0.2,2) {Phishing Site};
 
-% Parallel attack
-\draw[->,red] (0.5,6) -- (1,4) node[midway,above,red] {Spoofed Response 1};
-\draw[->,red] (1.5,6) -- (2,4) node[midway,above,red] {Spoofed Response 2};
-\draw[->,red] (2.5,6) -- (3,4) node[midway,above,red] {Spoofed Response N};
+% Attack flow with clear labels
+\draw[->,thick] (1,5) -- (1.5,4);
+\node[right] at (1.6,4.5) {1. Query};
+
+\draw[->,thick] (2,4) -- (2.5,3);
+\node[right] at (2.6,3.5) {2. Query};
+
+% Parallel attack responses
+\draw[->,red,thick] (1.2,6) -- (1.7,4);
+\node[red,right] at (1.8,5) {3a. Spoofed Response 1};
+
+\draw[->,red,thick] (1.8,6) -- (2.3,4);
+\node[red,right] at (2.4,5.5) {3b. Spoofed Response 2};
+
+\draw[->,red,thick] (2.4,6) -- (2.9,4);
+\node[red,right] at (3.0,5.2) {3c. Spoofed Response N};
 
 % Race condition
-\draw[->,blue] (2.5,3) -- (3,4) node[midway,above,blue] {Legitimate Response};
+\draw[->,blue,thick] (3,3) -- (3.5,4);
+\node[blue,right] at (3.6,3.5) {4. Legitimate Response};
 
 % Poisoned response
-\draw[->] (3.5,4) -- (4,5) node[midway,above] {Poisoned Response};
+\draw[->,thick] (4,4) -- (4.5,5);
+\node[right] at (4.6,4.5) {5. Poisoned Response};
 
 % Phishing
-\draw[->,orange,thick] (4.5,5) -- (5,2) node[midway,right,orange] {HTTP Request};
-\draw[->,orange,thick] (5.5,2) -- (6,5) node[midway,left,orange] {Phishing Page};
+\draw[->,orange,thick] (5,5) -- (5.5,2);
+\node[orange,right] at (5.6,3.5) {6. HTTP Request};
+
+\draw[->,orange,thick] (6,2) -- (6.5,5);
+\node[orange,right] at (6.6,3.5) {7. Phishing Page};
 
 \end{tikzpicture}
 \caption{Attack Timing: DNS Poisoning and Phishing}
