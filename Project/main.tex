@@ -33,11 +33,13 @@
 % Update title
 \title{CSE-406 Project : DNS Cache Poisoning and Phishing Attack}
 \author{
-    Kowshik Saha\\
+    Kowshik Saha Kabya\\
     ID: 2005006
     \and
     Fairuz Mubashwera\\
     ID: 2005030
+    \\[1em]
+    \textit{Bangladesh University of Engineering and Technology}
 }
 
 \date{\today}
@@ -45,6 +47,8 @@
 \begin{document}
 
 \maketitle
+
+\pagebreak
 
 \tableofcontents
 \newpage
@@ -130,13 +134,13 @@ The primary objectives of this DNS cache poisoning attack are:
 
 % Attack flow arrows with adjusted label positions
 \draw[->,red,thick] (attacker) to[bend left=20] (resolver);
-\node[red] at (2.75,0.2) {1. Spoofed Responses};
+\node[red] at (2.75,0.2) {3. Spoofed Responses};
 
 \draw[->,blue,thick] (resolver) to[bend right=20] (legit_ns);
 \node[blue] at (8.25,-1.8) {2. Legitimate Query};
 
 \draw[->,green,thick] (client) to[bend right=15] (resolver);
-\node[green] at (7.5,-2.7) {3. Client Query};
+\node[green] at (7.5,-2.7) {1. Client Query};
 
 \draw[->,orange,thick] (resolver) to[bend left=30] (phish);
 \node[orange] at (1.2,-2.7) {4. Redirected to Phishing Site};
@@ -149,12 +153,14 @@ The primary objectives of this DNS cache poisoning attack are:
 
 \subsection{Network Components}
 
-\begin{description}
-    \item[Attacker Machine] The system running the DNS cache poisoning tool, capable of generating spoofed DNS packets
-    \item[Target DNS Resolver] The recursive DNS server whose cache is to be poisoned
-    \item[Legitimate Nameserver] The authoritative DNS server for the target domain
-    \item[DNS Client] Regular clients that query the poisoned resolver
-\end{description}
+\noindent\textbf{Attacker Machine:} The system running the DNS cache poisoning tool, capable of\\
+\hspace*{3.9cm} generating spoofed DNS packets.
+
+\noindent\textbf{Target DNS Resolver:} The recursive DNS server whose cache is to be poisoned.
+
+\noindent\textbf{Legitimate Nameserver:} The authoritative DNS server for the target domain.
+
+\noindent\textbf{DNS Client:} Regular clients that query the poisoned resolver.
 
 \section{Timing Diagrams}
 
@@ -278,7 +284,7 @@ The primary objectives of this DNS cache poisoning attack are:
 \node[orange] at (5.7,6.3) {\textbf{6}};
 
 \draw[->,orange,thick] (7,3) -- (7.5,6);
-\node[orange] at (6.7,3.3) {\textbf{7}};
+\node[orange] at (7.5,3.3) {\textbf{7}};
 
 \end{tikzpicture}
 \caption{Attack Timing: DNS Poisoning and Phishing}
@@ -308,22 +314,22 @@ The DNS query packet is constructed with the following fields\cite{cert-dns}:
 \hline
 \textbf{Field} & \textbf{Description} \\
 \hline
-Transaction ID & Random 16-bit identifier  used to match requests and responses. \\
+Transaction ID & Random 16-bit identifier  used to match requests and responses \\
 \hline
-Flags & Set to \texttt{DNS\_FLAG\_QUES}, indicating a DNS query packet. \\
+Flags & Set to \texttt{DNS\_FLAG\_QUES}, indicating a DNS query packet \\
 \hline
-Questions (QDCOUNT) &  the number of queries included. \\
+Questions (QDCOUNT) &  The number of queries included \\
 \hline
-Answer RRs (ANCOUNT) &  number of answers are present in the query. \\
+Answer RRs (ANCOUNT) &  The number of answers present in the query \\
 \hline
-Authority RRs & number of authority records included. \\
+Authority RRs & The number of authority records included \\
 \hline
-Additional RRs & number of  additional records included. \\
+Additional RRs & The number of  additional records included \\
 \hline
-Question Section & Contains a single query record specifying: \\
-& \quad - Query type . \\
-& \quad - Query class . \\
-& \quad - Query name . \\
+Question Section & A single query record specifying: \\
+& \quad - Query type  \\
+& \quad - Query class  \\
+& \quad - Query name  \\
 \hline
 \end{tabular}
 \caption{Structure of the DNS query packet}
@@ -341,25 +347,25 @@ The spoofed DNS response packet includes the following fields\cite{cert-dns}:
 \hline
 \textbf{Field} & \textbf{Description} \\
 \hline
-Transaction ID & Random 16-bit identifier, attempting to match the resolver’s expected transaction ID. \\
+Transaction ID & Random 16-bit identifier, attempting to match the resolver’s expected transaction ID \\
 \hline
-Flags & Set to \texttt{DNS\_FLAG\_RESP}, indicating a DNS response packet. \\
+Flags & Set to \texttt{DNS\_FLAG\_RESP}, indicating a DNS response packet \\
 \hline
-Questions (QDCOUNT) & same query as in the original request. \\
+Questions (QDCOUNT) & The same query as in the original request \\
 \hline
-Answer RRs (ANCOUNT) & number of answer record. \\
+Answer RRs (ANCOUNT) & The number of answer records \\
 \hline
-Authority RRs & number of authority record. \\
+Authority RRs & The number of authority records \\
 \hline
-Additional RRs & number of  additional record (glue record). \\
+Additional RRs & The number of  additional records (glue record) \\
 \hline
-Question Section & Repeats the original query: \texttt{A} record for the random subdomain. \\
+Question Section & Repeats the original query: \texttt{A} record for the random subdomain \\
 \hline
-Answer Section & Provides a fake  record mapping the random subdomain to the attacker-controlled IP address. \\
+Answer Section & Provides a fake  record mapping the random subdomain to the attacker-controlled IP address \\
 \hline
-Authority Section & Sets the nameserver (\texttt{NS}) record for the domain to an attacker-controlled nameserver. \\
+Authority Section & Sets the nameserver (\texttt{NS}) record for the domain to an attacker-controlled nameserver \\
 \hline
-Additional Section & Provides the record (IP address) of the attacker-controlled nameserver (glue record). \\
+Additional Section & Provides the record (IP address) of the attacker-controlled nameserver (glue record) \\
 \hline
 \end{tabular}
 \caption{Structure of the spoofed DNS response packet}
