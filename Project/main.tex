@@ -59,13 +59,20 @@ This report presents a design proposal of a two-stage network attack: DNS Cache 
 
 The attack consists of two phases:
 \begin{enumerate}
-    \item \textbf{DNS Cache Poisoning}: The attacker poisons the resolver's cache, redirecting traffic for a target domain to an attacker-controlled IP.
-    \item \textbf{Phishing}: The attacker hosts a fake website at the spoofed IP, tricking users into submitting sensitive credentials.
+    \item \textbf{DNS Cache Poisoning}: DNS cache poisoning is a cyberattack in which a malicious actor injects forged DNS responses into the cache of a DNS resolver. The goal is to corrupt the resolver's memory by making it associate a domain name with a fake IP address controlled by the attacker.
+    
+In a typical DNS lookup, a resolver queries authoritative servers to resolve domain names into IP addresses. If the attacker can successfully send a spoofed DNS response before the legitimate one arrives — with the correct transaction ID, source port, and spoofed source IP — the resolver will accept and cache the malicious response \cite{rfc1035}.
+
+Once poisoned, the resolver will serve the attacker’s IP for all future queries to the targeted domain. This allows the attacker to redirect users to phishing sites without the knowledge of victim.
+
+    \item \textbf{Phishing}: Phishing is a form of cyberattack in which an attacker impersonates a legitimate entity to deceive users into revealing sensitive information such as usernames, passwords, or financial details. This is often carried out through fake websites or emails that closely mimic trusted sources. The goal is to exploit the user’s trust and familiarity with these entities in order to harvest confidential data or deliver malware. 
+
+One method attackers use to carry out phishing more convincingly is DNS cache poisoning. By corrupting the cache of a DNS resolver, the attacker can redirect traffic for a legitimate domain to a malicious server without altering the domain name shown in the user's browser . Because the URL appears correct and the page looks authentic, users are more likely to enter their credentials or other sensitive data, unknowingly handing them over to the attacker. 
 \end{enumerate}
 
-\subsection{Kaminsky Attack Variant}
+\subsection{Kaminsky Attack Variant of DNS Cache Poisoning}
 
-The proposed design uses the Kaminsky attack technique, which exploits the birthday paradox to significantly increase the success probability of cache poisoning. Instead of targeting a single transaction, the attack:
+The proposed design uses the Kaminsky attack technique, which exploits the birthday paradox to significantly increase the success probability of cache poisoning. Instead of targeting a single transaction, the attack\cite{rfc4033}:
 
 \begin{enumerate}
     \item Sends multiple parallel DNS queries for random subdomains
@@ -101,37 +108,43 @@ The primary objectives of this DNS cache poisoning attack are:
     phishing/.style={box,fill=orange!20}
 ]
 
-% Node grid (absolute positions)
-\node[attack]   (attacker)   at (0,0)   {Attacker\\Machine};
-\node[server]   (resolver)   at (5,0)   {Target DNS Resolver};
-\node[server]   (legit_ns)   at (10,0)  {Legitimate\\Nameserver};
-\node[phishing] (phish)      at (0,-3)  {Phishing\\Web Server};
-\node[client]   (client)     at (5,-3)  {DNS Client};
+% Node grid moved down
+\node[attack]   (attacker)   at (0,-0.8)     {Attacker\\Machine};
+\node[server]   (resolver)   at (5.5,-0.8)   {Target DNS Resolver};
+\node[server]   (legit_ns)   at (11,-0.8)    {Legitimate\\Nameserver};
+\node[phishing] (phish)      at (0,-4.3)       {Phishing\\Web Server};
+\node[client]   (client)     at (5.5,-4.3)     {DNS Client};
 
 % Labels above top row
-\node[align=center] at (0,1)   {\textbf{Attack Vector}};
-\node[align=center] at (5,1)   {\textbf{Target}};
-\node[align=center] at (10,1)  {\textbf{Victim}};
+\node[align=center] at (0,0.7)     {\textbf{Attack Vector}};
+\node[align=center] at (5.5,0.7)   {\textbf{Target}};
+\node[align=center] at (11,0.7)    {\textbf{Victim}};
 % Label below phishing site
-\node[align=center] at (0,-4.2) {\textbf{Phishing Site}};
+\node[align=center] at (0,-5.2)    {\textbf{Phishing Site}};
 
-% Network connections
+% Network connections (basic lines)
 \draw[thick] (attacker) -- (resolver);
 \draw[thick] (resolver) -- (legit_ns);
 \draw[thick] (client) -- (resolver);
 \draw[thick,orange] (client) -- (phish);
 
-% Attack flow arrows (with clear bends and label positions)
-\draw[->,red,thick] (attacker) to[bend left=25] node[above,sloped,near start] {1. Spoofed Responses} (resolver);
-\draw[->,blue,thick] (resolver) to[bend right=25] node[below,sloped,midway] {2. Legitimate Query} (legit_ns);
-\draw[->,green,thick] (client) to[bend left=20] node[right,sloped,midway] {3. Client Query} (resolver);
-\draw[->,orange,thick] (resolver) to[bend left=35] node[below,sloped,midway] {4. Redirected to Phishing Site} (phish);
+% Attack flow arrows with adjusted label positions
+\draw[->,red,thick] (attacker) to[bend left=20] (resolver);
+\node[red] at (2.75,0.2) {1. Spoofed Responses};
+
+\draw[->,blue,thick] (resolver) to[bend right=20] (legit_ns);
+\node[blue] at (8.25,-1.8) {2. Legitimate Query};
+
+\draw[->,green,thick] (client) to[bend right=15] (resolver);
+\node[green] at (7.5,-2.7) {3. Client Query};
+
+\draw[->,orange,thick] (resolver) to[bend left=30] (phish);
+\node[orange] at (1.2,-2.7) {4. Redirected to Phishing Site};
 
 \end{tikzpicture}
 \caption{Network Topology: DNS Cache Poisoning and Phishing}
 \label{fig:topology}
 \end{figure}
-
 
 
 \subsection{Network Components}
@@ -245,34 +258,81 @@ The attack employs a sophisticated timing strategy:
 
 \subsection{DNS Query Packet Structure}
 
-The tool generates DNS query packets with the following structure:
+The DNS query packet is constructed with the following fields\cite{cert-dns}:
 
-\begin{lstlisting}[caption=DNS Query Packet Generation]
-mk_dns_hdr(&D, rand() % 0xffff, DNS_FLAG_QUES, 1, 0, 0, 0); 
-app_q_rec(&D, IN, A, rndsd);
-\end{lstlisting}
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{8cm}|}
+\hline
+\textbf{Field} & \textbf{Description} \\
+\hline
+Transaction ID & Random 16-bit identifier  used to match requests and responses. \\
+\hline
+Flags & Set to \texttt{DNS\_FLAG\_QUES}, indicating a DNS query packet. \\
+\hline
+Questions (QDCOUNT) &  the number of queries included. \\
+\hline
+Answer RRs (ANCOUNT) &  number of answers are present in the query. \\
+\hline
+Authority RRs & number of authority records included. \\
+\hline
+Additional RRs & number of  additional records included. \\
+\hline
+Question Section & Contains a single query record specifying: \\
+& \quad - Query type . \\
+& \quad - Query class . \\
+& \quad - Query name . \\
+\hline
+\end{tabular}
+\caption{Structure of the DNS query packet}
+\end{table}
 
-\subsection{DNS Response Packet Structure}
+\vspace{1em}
 
-The spoofed DNS response packets contain:
+\subsection{Spoofed DNS Response Packet Structure}
 
-\begin{lstlisting}[caption=Spoofed DNS Response Structure]
-mk_dns_hdr(&D, rand() % 0xffff, DNS_FLAG_RESP, 1, 1, 1, 1);
-off1 = app_q_rec(&D, IN, A, rndsd);
-       app_r_rec(&D, IN, A, attacker_ip, off1);
-off2 = app_r_rec(&D, IN, NS, attacker_ns, off1+RAND_LEN+1);
-       app_r_rec(&D, IN, A, attacker_ip, off2);
-\end{lstlisting}
+The spoofed DNS response packet includes the following fields\cite{cert-dns}:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|p{8cm}|}
+\hline
+\textbf{Field} & \textbf{Description} \\
+\hline
+Transaction ID & Random 16-bit identifier, attempting to match the resolver’s expected transaction ID. \\
+\hline
+Flags & Set to \texttt{DNS\_FLAG\_RESP}, indicating a DNS response packet. \\
+\hline
+Questions (QDCOUNT) & same query as in the original request. \\
+\hline
+Answer RRs (ANCOUNT) & number of answer record. \\
+\hline
+Authority RRs & number of authority record. \\
+\hline
+Additional RRs & number of  additional record (glue record). \\
+\hline
+Question Section & Repeats the original query: \texttt{A} record for the random subdomain. \\
+\hline
+Answer Section & Provides a fake  record mapping the random subdomain to the attacker-controlled IP address. \\
+\hline
+Authority Section & Sets the nameserver (\texttt{NS}) record for the domain to an attacker-controlled nameserver. \\
+\hline
+Additional Section & Provides the record (IP address) of the attacker-controlled nameserver (glue record). \\
+\hline
+\end{tabular}
+\caption{Structure of the spoofed DNS response packet}
+\end{table}
+
 
 \subsection{IP Header Modifications}
 
-The tool creates raw IP packets with the following modifications:
+The design proposes raw IP packets with the following modifications:
 
 \begin{table}[H]
 \centering
 \begin{tabular}{|l|l|l|}
 \hline
-\textbf{Field} & \textbf{Value} & \textbf{Purpose} \\
+\textbf{Field} & \textbf{Modified Value} & \textbf{Purpose} \\
 \hline
 Source IP & Original Nameserver IP & Spoofing \\
 Destination IP & Target Resolver IP & Targeting \\
@@ -290,7 +350,7 @@ TTL & 64 & Network traversal \\
 \centering
 \begin{tabular}{|l|l|l|}
 \hline
-\textbf{Field} & \textbf{Value} & \textbf{Purpose} \\
+\textbf{Field} & \textbf{Modified Value} & \textbf{Purpose} \\
 \hline
 Source Port & 53 (DNS) & Appear as DNS server \\
 Destination Port & Resolver's port & Target specific port \\
@@ -378,9 +438,9 @@ After DNS poisoning, the following packets are observed:
 
 \subsection{Why This Design Should Work}
 
-\subsubsection{1. Birthday Paradox Exploitation}
+\subsubsection{ Birthday Paradox Exploitation}
 
-The attack leverages the birthday paradox to increase success probability:
+The attack leverages the birthday paradox \cite{feng-dns} to increase success probability:
 
 \begin{equation}
 P(\text{collision}) = 1 - \frac{365!}{(365-n)! \times 365^n}
@@ -388,7 +448,7 @@ P(\text{collision}) = 1 - \frac{365!}{(365-n)! \times 365^n}
 
 With K parallel requests and M spoofed responses, the probability of at least one transaction ID match is significantly higher than the naive 1/65536.
 
-\subsubsection{2. Race Condition Advantage}
+\subsubsection{ Race Condition Advantage}
 
 The attack creates a race condition between:
 \begin{itemize}
@@ -398,7 +458,7 @@ The attack creates a race condition between:
 
 By flooding the target with responses immediately after queries, the attacker increases the chance of winning the race.
 
-\subsubsection{3. Authority Section Poisoning}
+\subsubsection{ Authority Section Poisoning}
 
 The attack specifically targets the authority section, which contains nameserver information. This provides:
 
@@ -408,7 +468,7 @@ The attack specifically targets the authority section, which contains nameserver
     \item \textbf{Scope}: Affects all subdomains of the target domain
 \end{itemize}
 
-\subsubsection{4. Random Subdomain Strategy}
+\subsubsection{ Random Subdomain Strategy}
 
 Using random subdomains provides several advantages:
 
@@ -428,71 +488,40 @@ Combining DNS cache poisoning with phishing maximizes the attack's impact:
     \item \textbf{Scalability}: Attack can target any domain
 \end{itemize}
 
-\subsection{Technical Feasibility}
 
-\subsubsection{1. Raw Socket Capabilities}
 
-The tool uses raw sockets to:
-\begin{itemize}
-    \item Craft custom IP headers
-    \item Spoof source addresses
-    \item Bypass normal socket restrictions
-\end{itemize}
-
-\subsubsection{2. Network Assumptions}
-
-The attack assumes:
-\begin{itemize}
-    \item No egress filtering for spoofed packets
-    \item No source port randomization on target resolver
-    \item Network allows raw packet transmission
-\end{itemize}
-
-\subsubsection{3. Implementation Robustness}
-
-The implementation includes:
-\begin{itemize}
-    \item Proper checksum calculation
-    \item Memory management for packet construction
-    \item Error handling for network operations
-    \item Verification mechanisms for attack success
-\end{itemize}
-
-\section{Attack Success Metrics}
-
-\subsection{Success Criteria}
-
-The attack is considered successful when:
-\begin{enumerate}
-    \item The target resolver accepts a spoofed response
-    \item The authority section is poisoned with attacker nameserver
-    \item Future queries for the domain return attacker-controlled IP
-    \item The poisoned information persists in cache
-\end{enumerate}
-
-\subsection{Detection Methods}
-
-The tool includes verification mechanisms:
-\begin{lstlisting}[caption=Attack Verification]
-if( D.l > 8 && *(uint16_t*)&D.p[6] == htons(1) )
-{
-    printf( "\n\n[+] Poisoning was successful!\n\n" );
-    return 0;
-}
-\end{lstlisting}
 
 \section{Conclusion}
 
-This report demonstrates a full attack chain: DNS cache poisoning followed by phishing. By corrupting the resolver's cache, the attacker transparently redirects users to a phishing site, enabling large-scale credential theft. This highlights the critical need for DNSSEC, user vigilance, and robust network defenses.
+This report proposes a design for a full attack chain: DNS cache poisoning followed by phishing. By corrupting the resolver's cache, the attacker transparently redirects users to a phishing site, enabling large-scale credential theft. 
 
 The design's effectiveness is justified through:
 \begin{itemize}
     \item Mathematical exploitation of the birthday paradox
     \item Strategic timing and race condition manipulation
     \item Comprehensive packet crafting and spoofing
-    \item Robust implementation with proper error handling
 \end{itemize}
 
-This tool serves as an important educational resource for understanding DNS security vulnerabilities and developing appropriate countermeasures.
+
+\begin{thebibliography}{9}
+
+\bibitem{feng-dns}
+Wuchang Feng, \textit{CS510 Network Security Lecture Notes}, Fall 2005.  
+Available at: \url{https://www.thefengs.com/wuchang/courses/old_courses/cs510netsec_fall2005/summaries/10.pdf}
+
+\bibitem{rfc1035}
+P. Mockapetris, \textit{RFC 1035: Domain Names - Implementation and Specification}, November 1987.  
+Available at: \url{https://datatracker.ietf.org/doc/html/rfc1035}
+
+\bibitem{rfc4033}
+R. Arends et al., \textit{RFC 4033: DNS Security Introduction and Requirements}, March 2005.  
+Available at: \url{https://datatracker.ietf.org/doc/html/rfc4033}
+
+\bibitem{cert-dns}
+CERT Coordination Center, \textit{DNS Cache Poisoning – The Next Generation}, April 2008.  
+Available at: \url{https://www.kb.cert.org/vuls/id/800113}
+
+\end{thebibliography}
+
 
 \end{document} 
