@@ -1,0 +1,498 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{subcaption}
+\usetikzlibrary{positioning}
+
+\geometry{margin=1in}
+
+% Code listing style
+\lstset{
+    language=C,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    numbers=left,
+    numberstyle=\tiny,
+    frame=single,
+    breaklines=true,
+    showstringspaces=false
+}
+
+% Update title
+\title{CSE-406 Project : DNS Cache Poisoning and Phishing Attack}
+\author{
+    Kowshik Saha\\
+    ID: 2005006
+    \and
+    Fairuz Mubashwera\\
+    ID: 2005030
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+This report presents a design proposal of a two-stage network attack: DNS Cache Poisoning followed by a phishing attack. The first stage corrupts the DNS resolver's cache, redirecting traffic for a target domain to an attacker-controlled IP. The second stage leverages this redirection to present a phishing site, harvesting user credentials. This end-to-end attack demonstrates the real-world impact of DNS vulnerabilities.
+
+\section{Definition of the Attack}
+
+\subsection{Attack Overview}
+
+The attack consists of two phases:
+\begin{enumerate}
+    \item \textbf{DNS Cache Poisoning}: The attacker poisons the resolver's cache, redirecting traffic for a target domain to an attacker-controlled IP.
+    \item \textbf{Phishing}: The attacker hosts a fake website at the spoofed IP, tricking users into submitting sensitive credentials.
+\end{enumerate}
+
+\subsection{Kaminsky Attack Variant}
+
+The proposed design uses the Kaminsky attack technique, which exploits the birthday paradox to significantly increase the success probability of cache poisoning. Instead of targeting a single transaction, the attack:
+
+\begin{enumerate}
+    \item Sends multiple parallel DNS queries for random subdomains
+    \item Floods the target resolver with spoofed responses
+    \item Exploits the birthday paradox to match transaction IDs
+    \item Poisons the authority section with malicious nameserver information
+\end{enumerate}
+
+\subsection{Attack Objectives}
+
+The primary objectives of this DNS cache poisoning attack are:
+
+\begin{itemize}
+    \item \textbf{Cache Corruption}: Inject false DNS records into the target resolver's cache
+    \item \textbf{Traffic Redirection}: Redirect legitimate traffic to attacker-controlled servers
+    \item \textbf{Authority Poisoning}: Replace legitimate nameservers with malicious ones
+    \item \textbf{Persistence}: Maintain the poisoned state for extended periods
+\end{itemize}
+
+
+
+\section{Topology Diagram}
+
+% Topology Diagram
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    every node/.style={font=\small},
+    box/.style={rectangle,draw,minimum width=2.5cm,minimum height=1cm,align=center},
+    attack/.style={box,fill=red!20},
+    server/.style={box,fill=blue!20},
+    client/.style={box,fill=green!20},
+    phishing/.style={box,fill=orange!20}
+]
+
+% Node grid (absolute positions)
+\node[attack]   (attacker)   at (0,0)   {Attacker\\Machine};
+\node[server]   (resolver)   at (5,0)   {Target DNS Resolver};
+\node[server]   (legit_ns)   at (10,0)  {Legitimate\\Nameserver};
+\node[phishing] (phish)      at (0,-3)  {Phishing\\Web Server};
+\node[client]   (client)     at (5,-3)  {DNS Client};
+
+% Labels above top row
+\node[align=center] at (0,1)   {\textbf{Attack Vector}};
+\node[align=center] at (5,1)   {\textbf{Target}};
+\node[align=center] at (10,1)  {\textbf{Victim}};
+% Label below phishing site
+\node[align=center] at (0,-4.2) {\textbf{Phishing Site}};
+
+% Network connections
+\draw[thick] (attacker) -- (resolver);
+\draw[thick] (resolver) -- (legit_ns);
+\draw[thick] (client) -- (resolver);
+\draw[thick,orange] (client) -- (phish);
+
+% Attack flow arrows (with clear bends and label positions)
+\draw[->,red,thick] (attacker) to[bend left=25] node[above,sloped,near start] {1. Spoofed Responses} (resolver);
+\draw[->,blue,thick] (resolver) to[bend right=25] node[below,sloped,midway] {2. Legitimate Query} (legit_ns);
+\draw[->,green,thick] (client) to[bend left=20] node[right,sloped,midway] {3. Client Query} (resolver);
+\draw[->,orange,thick] (resolver) to[bend left=35] node[below,sloped,midway] {4. Redirected to Phishing Site} (phish);
+
+\end{tikzpicture}
+\caption{Network Topology: DNS Cache Poisoning and Phishing}
+\label{fig:topology}
+\end{figure}
+
+
+
+\subsection{Network Components}
+
+\begin{description}
+    \item[Attacker Machine] The system running the DNS cache poisoning tool, capable of generating spoofed DNS packets
+    \item[Target DNS Resolver] The recursive DNS server whose cache is to be poisoned
+    \item[Legitimate Nameserver] The authoritative DNS server for the target domain
+    \item[DNS Client] Regular clients that query the poisoned resolver
+\end{description}
+
+\section{Timing Diagrams}
+
+\subsection{Original DNS Protocol Timing}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    scale=0.8,
+    every node/.style={font=\small}
+]
+
+% Timeline
+\draw[->] (0,0) -- (12,0);
+\node[below] at (0,0) {0ms};
+\node[below] at (2,0) {100ms};
+\node[below] at (4,0) {200ms};
+\node[below] at (6,0) {300ms};
+\node[below] at (8,0) {400ms};
+\node[below] at (10,0) {500ms};
+
+% Actors
+\node[left] at (0,4) {Client};
+\node[left] at (0,3) {Resolver};
+\node[left] at (0,2) {Nameserver};
+
+% Normal DNS flow
+\draw[->] (0.5,4) -- (1,3) node[midway,above] {Query};
+\draw[->] (1.5,3) -- (2,2) node[midway,above] {Query};
+\draw[->] (2.5,2) -- (3,3) node[midway,above] {Response};
+\draw[->] (3.5,3) -- (4,4) node[midway,above] {Response};
+
+\end{tikzpicture}
+\caption{Normal DNS Resolution Timing}
+\label{fig:normal_timing}
+\end{figure}
+
+\subsection{Attack Timing Diagram}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    scale=0.8,
+    every node/.style={font=\small}
+]
+
+% Timeline
+\draw[->] (0,0) -- (16,0);
+\node[below] at (0,0) {0ms};
+\node[below] at (2,0) {50ms};
+\node[below] at (4,0) {100ms};
+\node[below] at (6,0) {150ms};
+\node[below] at (8,0) {200ms};
+\node[below] at (10,0) {250ms};
+\node[below] at (12,0) {300ms};
+\node[below] at (14,0) {350ms};
+
+% Actors
+\node[left] at (0,6) {Attacker};
+\node[left] at (0,5) {Client};
+\node[left] at (0,4) {Resolver};
+\node[left] at (0,3) {Nameserver};
+\node[left] at (0,2) {Phishing Site};
+
+% Attack flow
+\draw[->] (0.5,5) -- (1,4) node[midway,above] {Query};
+\draw[->] (1.5,4) -- (2,3) node[midway,above] {Query};
+
+% Parallel attack
+\draw[->,red] (0.5,6) -- (1,4) node[midway,above,red] {Spoofed Response 1};
+\draw[->,red] (1.5,6) -- (2,4) node[midway,above,red] {Spoofed Response 2};
+\draw[->,red] (2.5,6) -- (3,4) node[midway,above,red] {Spoofed Response N};
+
+% Race condition
+\draw[->,blue] (2.5,3) -- (3,4) node[midway,above,blue] {Legitimate Response};
+
+% Poisoned response
+\draw[->] (3.5,4) -- (4,5) node[midway,above] {Poisoned Response};
+
+% Phishing
+\draw[->,orange,thick] (4.5,5) -- (5,2) node[midway,right,orange] {HTTP Request};
+\draw[->,orange,thick] (5.5,2) -- (6,5) node[midway,left,orange] {Phishing Page};
+
+\end{tikzpicture}
+\caption{Attack Timing: DNS Poisoning and Phishing}
+\label{fig:attack_timing}
+\end{figure}
+
+\subsection{Attack Strategy}
+
+The attack employs a sophisticated timing strategy:
+
+\begin{enumerate}
+    \item \textbf{Parallel Query Generation}: Multiple DNS queries for random subdomains are sent simultaneously
+    \item \textbf{Response Flooding}: A large number of spoofed responses are sent immediately after the queries
+    \item \textbf{Race Condition Exploitation}: The attacker races against legitimate responses
+    \item \textbf{Birthday Paradox Utilization}: Multiple queries increase the probability of transaction ID collision
+\end{enumerate}
+
+\section{Packet and Frame Details}
+
+\subsection{DNS Query Packet Structure}
+
+The tool generates DNS query packets with the following structure:
+
+\begin{lstlisting}[caption=DNS Query Packet Generation]
+mk_dns_hdr(&D, rand() % 0xffff, DNS_FLAG_QUES, 1, 0, 0, 0); 
+app_q_rec(&D, IN, A, rndsd);
+\end{lstlisting}
+
+\subsection{DNS Response Packet Structure}
+
+The spoofed DNS response packets contain:
+
+\begin{lstlisting}[caption=Spoofed DNS Response Structure]
+mk_dns_hdr(&D, rand() % 0xffff, DNS_FLAG_RESP, 1, 1, 1, 1);
+off1 = app_q_rec(&D, IN, A, rndsd);
+       app_r_rec(&D, IN, A, attacker_ip, off1);
+off2 = app_r_rec(&D, IN, NS, attacker_ns, off1+RAND_LEN+1);
+       app_r_rec(&D, IN, A, attacker_ip, off2);
+\end{lstlisting}
+
+\subsection{IP Header Modifications}
+
+The tool creates raw IP packets with the following modifications:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Field} & \textbf{Value} & \textbf{Purpose} \\
+\hline
+Source IP & Original Nameserver IP & Spoofing \\
+Destination IP & Target Resolver IP & Targeting \\
+Protocol & UDP (17) & DNS Transport \\
+TTL & 64 & Network traversal \\
+\hline
+\end{tabular}
+\caption{IP Header Modifications}
+\label{tab:ip_header}
+\end{table}
+
+\subsection{UDP Header Modifications}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Field} & \textbf{Value} & \textbf{Purpose} \\
+\hline
+Source Port & 53 (DNS) & Appear as DNS server \\
+Destination Port & Resolver's port & Target specific port \\
+Length & Calculated & Packet size \\
+Checksum & Calculated & Valid packet \\
+\hline
+\end{tabular}
+\caption{UDP Header Modifications}
+\label{tab:udp_header}
+\end{table}
+
+\subsection{DNS Header Structure}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Field} & \textbf{Size} & \textbf{Description} \\
+\hline
+Transaction ID & 16 bits & Random identifier \\
+Flags & 16 bits & Response flags \\
+Question Count & 16 bits & Number of questions \\
+Answer Count & 16 bits & Number of answers \\
+Authority Count & 16 bits & Number of authority records \\
+Additional Count & 16 bits & Number of additional records \\
+\hline
+\end{tabular}
+\caption{DNS Header Structure}
+\label{tab:dns_header}
+\end{table}
+
+\subsection{Resource Record Structure}
+
+The spoofed response includes multiple resource records:
+
+\begin{enumerate}
+    \item \textbf{Answer Record}: Maps random subdomain to attacker IP
+    \item \textbf{Authority Record}: Declares attacker as nameserver for target domain
+    \item \textbf{Additional Record}: Provides IP address for attacker nameserver
+\end{enumerate}
+
+\section{Phishing Attack Details}
+
+\subsection{Phishing Site Setup}
+
+After successful DNS cache poisoning, users attempting to visit the target domain are transparently redirected to a phishing site hosted by the attacker. This site mimics the legitimate website and is designed to capture sensitive credentials (e.g., usernames, passwords).
+
+\subsection{Credential Harvesting Flow}
+
+\begin{enumerate}
+    \item User enters the target domain in their browser
+    \item DNS resolver returns the attacker's IP (due to poisoning)
+    \item User's browser connects to the phishing server
+    \item Phishing site presents a fake login page
+    \item User submits credentials, which are stored by the attacker
+\end{enumerate}
+
+\subsection{Phishing Page Example}
+
+\begin{lstlisting}[language=HTML,caption=Example Phishing Login Page]
+<!DOCTYPE html>
+<html>
+<head><title>Login</title></head>
+<body>
+<h2>Login to Your Account</h2>
+<form method="POST" action="/steal">
+  Username: <input type="text" name="user"><br>
+  Password: <input type="password" name="pass"><br>
+  <input type="submit" value="Login">
+</form>
+</body>
+</html>
+\end{lstlisting}
+
+\subsection{Packet/Frame Details for Phishing}
+
+After DNS poisoning, the following packets are observed:
+\begin{itemize}
+    \item HTTP GET/POST requests from client to phishing server
+    \item HTTP responses containing fake login forms
+    \item POST requests containing stolen credentials
+\end{itemize}
+
+\section{Design Justification}
+
+\subsection{Why This Design Should Work}
+
+\subsubsection{1. Birthday Paradox Exploitation}
+
+The attack leverages the birthday paradox to increase success probability:
+
+\begin{equation}
+P(\text{collision}) = 1 - \frac{365!}{(365-n)! \times 365^n}
+\end{equation}
+
+With K parallel requests and M spoofed responses, the probability of at least one transaction ID match is significantly higher than the naive 1/65536.
+
+\subsubsection{2. Race Condition Advantage}
+
+The attack creates a race condition between:
+\begin{itemize}
+    \item Legitimate DNS responses from authoritative servers
+    \item Spoofed responses from the attacker
+\end{itemize}
+
+By flooding the target with responses immediately after queries, the attacker increases the chance of winning the race.
+
+\subsubsection{3. Authority Section Poisoning}
+
+The attack specifically targets the authority section, which contains nameserver information. This provides:
+
+\begin{itemize}
+    \item \textbf{Persistence}: Poisoned nameserver information remains in cache
+    \item \textbf{Amplification}: Future queries for the domain will be directed to attacker
+    \item \textbf{Scope}: Affects all subdomains of the target domain
+\end{itemize}
+
+\subsubsection{4. Random Subdomain Strategy}
+
+Using random subdomains provides several advantages:
+
+\begin{itemize}
+    \item \textbf{Cache Miss Guarantee}: Random subdomains are unlikely to be cached
+    \item \textbf{Query Generation}: Forces the resolver to query authoritative servers
+    \item \textbf{Attack Window}: Creates predictable timing for response injection
+\end{itemize}
+
+\subsection{End-to-End Attack Justification}
+
+Combining DNS cache poisoning with phishing maximizes the attack's impact:
+\begin{itemize}
+    \item \textbf{Stealth}: Users are unaware of redirection
+    \item \textbf{Effectiveness}: High likelihood of credential theft
+    \item \textbf{Persistence}: Poisoned cache can affect many users
+    \item \textbf{Scalability}: Attack can target any domain
+\end{itemize}
+
+\subsection{Technical Feasibility}
+
+\subsubsection{1. Raw Socket Capabilities}
+
+The tool uses raw sockets to:
+\begin{itemize}
+    \item Craft custom IP headers
+    \item Spoof source addresses
+    \item Bypass normal socket restrictions
+\end{itemize}
+
+\subsubsection{2. Network Assumptions}
+
+The attack assumes:
+\begin{itemize}
+    \item No egress filtering for spoofed packets
+    \item No source port randomization on target resolver
+    \item Network allows raw packet transmission
+\end{itemize}
+
+\subsubsection{3. Implementation Robustness}
+
+The implementation includes:
+\begin{itemize}
+    \item Proper checksum calculation
+    \item Memory management for packet construction
+    \item Error handling for network operations
+    \item Verification mechanisms for attack success
+\end{itemize}
+
+\section{Attack Success Metrics}
+
+\subsection{Success Criteria}
+
+The attack is considered successful when:
+\begin{enumerate}
+    \item The target resolver accepts a spoofed response
+    \item The authority section is poisoned with attacker nameserver
+    \item Future queries for the domain return attacker-controlled IP
+    \item The poisoned information persists in cache
+\end{enumerate}
+
+\subsection{Detection Methods}
+
+The tool includes verification mechanisms:
+\begin{lstlisting}[caption=Attack Verification]
+if( D.l > 8 && *(uint16_t*)&D.p[6] == htons(1) )
+{
+    printf( "\n\n[+] Poisoning was successful!\n\n" );
+    return 0;
+}
+\end{lstlisting}
+
+\section{Conclusion}
+
+This report demonstrates a full attack chain: DNS cache poisoning followed by phishing. By corrupting the resolver's cache, the attacker transparently redirects users to a phishing site, enabling large-scale credential theft. This highlights the critical need for DNSSEC, user vigilance, and robust network defenses.
+
+The design's effectiveness is justified through:
+\begin{itemize}
+    \item Mathematical exploitation of the birthday paradox
+    \item Strategic timing and race condition manipulation
+    \item Comprehensive packet crafting and spoofing
+    \item Robust implementation with proper error handling
+\end{itemize}
+
+This tool serves as an important educational resource for understanding DNS security vulnerabilities and developing appropriate countermeasures.
+
+\end{document} 
